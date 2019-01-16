@@ -1,0 +1,14 @@
+* add function for having bot leave a server (for local admins), should not remove data
+* implement sqlitedict to hold total user time spent in voice channel per guild
+* SOMETIME - add data visualization to the mix somehow??
+* implement performance impact tracking? see how much "work" this script takes
+* ***maybe improve performance
+* possibly allow user activity tracking?
+* add donator/advanced functions? possilby user activity tracking ^??
+***any other suggestions?
+
+
+
+NEED:
+*find some sort of hosting solution
+*ability to upgrade to new bot version with little downtime (shutdown/re-start w/o gap of timespent data
