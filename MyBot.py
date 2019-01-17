@@ -545,7 +545,8 @@ def re_init(message):
         u_data.commit()
         bot_stats.commit()
         #remove admins file and reset to owner_id
-        if os.path.exists('./admins.p'): os.remove('./admins.p')
+        if os.path.exists('./admins.p'):
+            os.remove('./admins.p')
         admins = []
         admins.append(str(owner_id))
         update_admins()
