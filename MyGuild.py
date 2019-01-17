@@ -1,7 +1,7 @@
 #class to contain guild information
 #id is guild id
-#guild_name is string of guild name
-#channels is list of voice channels (not tracking text channels)
+#name is string of guild name
+#voice_channels keeps track of guild voice channel ids
 
 
 class MyGuild():
@@ -9,17 +9,11 @@ class MyGuild():
         self.id = guild.id
         self.str_id = str(guild.id)
         self.name = guild.name
-        self.channels = guild.voice_channels
+        self.in_guild = True
+        self.voice_channels = []
 
-    #returns list of voice channels
-    def return_voice_channels(self):
-        if self.channels is not None:
-            return self.channels
-        return None
-
-    def print_voice_channels(self):
-        if self.channels is not None:
-            for ch in self.channels:
-                print(ch.name)
-        else:
-            print('No voice channels.')
+    #helps iterate through a guild to make sure we have all voice channels represented
+    def update_voice_channels(self, guild):
+        for ch in guild.voice_channels:
+            if str(ch.id) not in self.voice_channels:
+                self.voice_channels.append(str(ch.id))
