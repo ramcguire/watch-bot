@@ -1,7 +1,9 @@
 #class to contain channel information/timing
 #channel information is stored in MyMember channel_info and known_channels
 #doesn't contain guild channel information
+import logging
 import pendulum
+
 
 class MyChannel():
     def __init__(self, channel):
@@ -10,6 +12,7 @@ class MyChannel():
         self.str_id = str(channel.id)
         self.name = channel.name
         self.mention = channel.mention
+        self.in_channel = True
         self.time_spent = []
 
     #returns guild object this channel belongs to
@@ -39,7 +42,12 @@ class MyChannel():
         if self.leave_time is None or self.join_time is None:
             print('invalid update_time_spent() call')
             return
-        group = (self.join_time, self.leave_time, self.calc_time_in_channel())
+        time_spent = self.calc_time_in_channel()
+        if time_spent < 0:
+            print('found negative time_spent value, ignoring...')
+            logging.warning('found negative time_spent value, ignoring...')
+            return
+        group = (self.join_time, self.leave_time, time_spent)
         self.time_spent.append(group)
         self.join_time = None
         self.leave_time = None
@@ -67,6 +75,8 @@ class MyChannel():
         sum = 0.0
         for timestamps in self.time_spent:
             sum += timestamps[2]
+        if self.in_channel:
+            sum += (pendulum.now('UTC') - self.join_time).total_seconds()
         return sum
 
     #returns seconds since joining voice channel

@@ -13,7 +13,7 @@ from operator import attrgetter
 
 
 #setup logging to file (ignoring debug logging)
-logging.basicConfig(filename='./data/activity_log.log', level=logging.INFO)
+logging.basicConfig(filename='.activity_log.log', level=logging.INFO)
 
 #token for discord bot (from discord api)
 with open('discord_token.txt', 'r') as myfile:
@@ -29,8 +29,10 @@ commands_str = '$commands - returns a list of commands user is authorized to use
 commands_str += '$timespent - returns time spent in voice channels of the requesting user in current guild.\n'
 commands_str += '$bot_stats - returns random bot statistics.\n'
 commands_str += '$reset_user_stats - removes stats for respective user in this guild.\n'
-commands_str += '$set_pref_tz - allows you to set a preferred timezone for data display. Syntax: $set_pref_tz Timezone_name'
-commands_str += '$get_pref_tz - sends you a message with your current timezone (defaults to UTC).'
+commands_str += '$set_pref_tz - allows you to set a preferred timezone for data display. Syntax: $set_pref_tz Timezone_name\n'
+commands_str += '-------------- use https://en.wikipedia.org/wiki/List_of_tz_database_time_zones to find your Timezone database name.\n'
+commands_str += '$get_pref_tz - sends you a message with your current timezone (defaults to UTC).\n'
+commands_str += '$guild_stats - Prints a summary of collective time spent by users in voice channels in this guild.'
 
 
 commands_str_local_admin = '[GUILD ADMIN] $reset_guild_stats (owner/admin of guild only) - removes all tracked time for all users in guild.\n'
@@ -49,20 +51,20 @@ continue_timer = True
 
 #keeping track of all data here
 #uses sqlite/pickle to store objects in a persistent dictionary
-bot_stats = SqliteDict('./data/bot_stats.db')
-u_data = SqliteDict('./data/user_data.db')
+bot_stats = SqliteDict('./bot_stats.db')
+u_data = SqliteDict('./user_data.db')
+g_data = SqliteDict('./guild_data.db')
 
-#possible move this to a file later?
-#might speedup initialization
-g_data = {}
+
 admins = []
 #load admins information
 #if doesn't exist, run InitHelper
-if not os.path.isfile('./data/admins.p'):
+if not os.path.isfile('./admins.p'):
     admins.append(str(owner_id))
-    pickle.dump(admins, open('./data/admins.p', 'wb'))
+    pickle.dump(admins, open('./admins.p', 'wb'))
 
-admins = pickle.load(open('./data/admins.p', 'rb'))
+admins = pickle.load(open('./admins.p', 'rb'))
+
 
 #helper method to increment commands run in bot_stats dict
 def increment_commands_run():
@@ -102,7 +104,6 @@ def get_commands(message):
     return result
 
 
-
 #returns bot_stats string
 def get_bot_stats(message):
     #increment commands count
@@ -120,7 +121,7 @@ def get_bot_stats(message):
 def update_admins():
     print('updating admin list')
     logging.info('updating admin list')
-    pickle.dump(admins, open('./data/admins.p', 'wb'))
+    pickle.dump(admins, open('./admins.p', 'wb'))
 
 
 #adds all members to admin file
@@ -176,7 +177,8 @@ def update_running_since():
 #updates all bot stats
 #uses BackgroundTimer for regular updates (currently every 60s)
 def update_bot_stats():
-    guild_count = len(g_data)
+    active_guilds = [x for x in g_data.values() if x.in_guild]
+    guild_count = len(active_guilds)
     user_count = len(u_data)
     bot_stats['guild_count'] = guild_count
     bot_stats['user_count'] = user_count
@@ -224,6 +226,7 @@ def read_member(member):
         else:
             print('found bot user in read_member: ignoring')
             logging.info('found bot user in read_member: ignoring')
+            return None
     #returns member object
     return u_data[str(member.id)]
 
@@ -235,14 +238,24 @@ def guild_join(guild):
     new_guild = MyGuild(guild)
     if new_guild.str_id not in g_data.keys():
         g_data[new_guild.str_id] = new_guild
+    else:
+        current_guild = g_data[new_guild.str_id]
+        current_guild.in_guild = True
+        g_data[new_guild.str_id] = current_guild
+
     log_str = 'initializing voice channels in guild \"{0}\"'.format(new_guild.name)
     print(log_str)
     logging.info(log_str)
-    for ch in new_guild.channels:
+    for ch in guild.voice_channels:
+        current_guild = g_data[new_guild.str_id]
+        current_guild.update_voice_channels(guild)
         for mem in ch.members:
             current_member = read_member(mem)
+            if current_member is None:
+                pass
             current_member.set_current_channel(None, ch)
             u_data[current_member.str_id] = current_member
+    g_data.commit()
     u_data.commit()
 
 
@@ -280,6 +293,28 @@ def check_in_channel():
     u_data.commit()
 
 
+#returns a collective timesummary for users spent in each voice channel
+#only works in guild
+def get_guild_stats(message):
+    increment_commands_run()
+    total_time = 0.0
+    ret_str = 'User voice channel activity in guild \"{0}\"\n'.format(message.guild.name)
+    for ch in message.guild.voice_channels:
+        matching_users = [x for x in u_data.values() if str(ch.id) in x.channel_info]
+        this_channel = 0.0
+        if len(matching_users):
+            active_users = 0
+            for items in matching_users:
+                this_channel += items.get_channel_info(ch.id).get_time_in_channel()
+                active_users += 1
+            ret_str += '{0} - {1} collective time wasted by {2} users.\n'.format(ch.mention, format_seconds(this_channel), str(active_users))
+        else:
+            ret_str += '{0} - No data recorded for this channel\n'.format(ch.mention)
+        total_time += this_channel
+    ret_str += 'Total time spent in voice channels by users: {0}\n'.format(format_seconds(total_time))
+    return ret_str
+
+
 #calculates timespent for user in all tracked guilds
 def get_full_timesummary(message):
     increment_commands_run()
@@ -292,10 +327,6 @@ def get_full_timesummary(message):
     if member_id not in u_data.keys():
         return no_data_str
     member = u_data[member_id]
-    #offset amount if in channel currently
-    offset = 0.0
-    if member.in_channel:
-        offset = member.current_channel.get_time_since_join()
     for guilds in member.guild_info.keys():
         ret_str += 'Guild: {0}\n'.format(g_data[str(guilds)].name)
         guild_channels = [x for x in member.channel_info.values() if x.guild_id == int(guilds)]
@@ -304,9 +335,6 @@ def get_full_timesummary(message):
         for ch in chan_info:
             #get base time in channel
             time_in_channel = ch.get_time_in_channel()
-            #add offset if necessary
-            if member.in_channel and ch.compare_channel_id(member.current_channel.id):
-                time_in_channel += offset
             #add time information to time summary
             ch_summary = '{0} - {1}\n'.format(ch.mention, format_seconds(time_in_channel))
             ret_str += ch_summary
@@ -333,10 +361,6 @@ def get_timesummary(message):
         return no_data_str
     #member object we will use
     member = u_data[str(member_id)]
-    #offset amount if in channel currently
-    offset = 0.0
-    if member.in_channel:
-        offset = member.current_channel.get_time_since_join()
     #start creating response string
     time_summary = '{0}\'s summary of time spent in voice channels in \"{1}\":\n'.format(member.display_name, message.guild.name)
 
@@ -350,9 +374,6 @@ def get_timesummary(message):
     for ch in chan_info:
         #get base time in channel
         time_in_channel = ch.get_time_in_channel()
-        #add offset if necessary
-        if member.in_channel and ch.compare_channel_id(member.current_channel.id):
-            time_in_channel += offset
         #add time information to time summary
         ch_summary = '{0} - {1}\n'.format(ch.mention, format_seconds(time_in_channel))
         time_summary = time_summary + ch_summary
@@ -493,6 +514,7 @@ def on_bot_init():
     if 'shutdown' in bot_stats.keys():
         if not bot_stats['shutdown']:
             if len(u_data):
+                print('using check_in_channel')
                 check_in_channel()
     bot_stats['shutdown'] = False
     #gets list of guilds
@@ -516,14 +538,14 @@ def re_init(message):
     if is_owner(message.author.id):
         logging.info('recieved $re_init command from {0}'.format(message.author.display_name))
         #clear all tracked data (will be re-initialized in on_bot_init)
-        global g_data
-        g_data = {}
+        g_data.clear()
         u_data.clear()
         bot_stats.clear()
+        g_data.commit()
         u_data.commit()
         bot_stats.commit()
         #remove admins file and reset to owner_id
-        if os.path.exists('./data/admins.p'): os.remove('./data/admins.p')
+        if os.path.exists('./admins.p'): os.remove('./admins.p')
         admins = []
         admins.append(str(owner_id))
         update_admins()
@@ -545,7 +567,7 @@ def re_init(message):
 #clear log file
 #maybe save it later?
 def clear_log_file():
-    with open('./data/activity_log.log', 'w') as file:
+    with open('./activity_log.log', 'w') as file:
         pass
 
 
@@ -568,7 +590,7 @@ def shutdown(message):
         #close sqlitedict connections
         u_data.close()
         bot_stats.close()
-        exit()
+        logging.info('closing client and quitting script')
     else:
         logging.warning('INVALID $shutdown command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
 
@@ -581,6 +603,7 @@ def set_pref_tz(message):
     if len(arguments):
         #check if argument is a valid timezone name
         if arguments[0] in pendulum.timezones:
+            increment_commands_run()
             #set and update pref_tz
             member = read_member(message.author)
             member.pref_tz = arguments[0]
@@ -593,9 +616,38 @@ def set_pref_tz(message):
 
 #returns the pref_tz of the author
 def get_pref_tz(message):
+    increment_commands_run()
     member = read_member(message.author)
+    if member is None:
+        return None
     return member.pref_tz
 
+
+#leaves guild message was sent in
+#for local_admin or owner
+def leave_guild(message):
+    #if user is authorized to run this command
+    if is_owner(message.author.id) or is_local_admin(message.author.id):
+        increment_commands_run()
+        logging.info('recieved $leave_guild command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
+        #iterate through members in voice channels and adjust leave time
+        for channels in message.guild.voice_channels:
+            for members in channels.members:
+                current_mem = read_member(members)
+                if current_mem is None:
+                    pass
+                current_mem.adjust_leave_time(pendulum.now('UTC'))
+                u_data[current_mem.str_id] = current_mem
+        #commit changes, and remove guild from guild data
+        u_data.commit()
+        logging.info('finished closing voice channel information for members in {0}, leaving guild'.format(message.guild.name))
+        guild_to_leave = g_data[str(message.guild.id)]
+        guild_to_leave.in_guild = False
+        g_data[str(message.guild.id)] = guild_to_leave
+        update_bot_stats()
+        return
+    logging.warning('recieved INVALID $leave_guild command from {0}'.format(message.author.display_name))
+    return
 
 #------------------------------------------------------------------------------------------------------------------------#
 #-------------------------------------------------ALL EVENTS BELOW-------------------------------------------------------#
@@ -632,10 +684,13 @@ async def on_message(message):
         await message.channel.send(get_timesummary(message))
         return
 
-
     #shutdown command
     if message.content.startswith('$shutdown'):
+        #handles all shutdown procedures
         shutdown(message)
+        #closes client and exits
+        await client.close()
+        exit()
         return
 
     #add_admin
@@ -644,12 +699,10 @@ async def on_message(message):
         add_admin(message)
         return
 
-
     #list_admins
     #OWNER OR BOT ADMIN
     if message.content.startswith('$list_admins'):
         await message.author.send(list_admins(message))
-
 
     #rem_admin
     #OWNER ONLY
@@ -664,7 +717,7 @@ async def on_message(message):
             await message.channel.send('This command needs to be sent from a guild.')
             return
         await message.channel.send(reset_guild_stats(message))
-        on_guild_join(message.guild)
+        guild_join(message.guild)
         return
 
     #reset_user_stats
@@ -672,6 +725,7 @@ async def on_message(message):
         if type(message.channel) is discord.DMChannel:
             await message.channel.send('Are you sure you want to remove all user stats?')
             await message.channel.send('Send \"CONFIRM\" to confirm.')
+
             def check(m):
                 return m.content == 'CONFIRM'
             msg = await client.wait_for('message', check=check)
@@ -684,7 +738,6 @@ async def on_message(message):
     if message.content.startswith('$bot_stats'):
         await message.channel.send(get_bot_stats(message))
         return
-
 
     #commands
     if message.content.startswith('$commands'):
@@ -703,7 +756,6 @@ async def on_message(message):
         re_init(message)
         return
 
-
     #set_pref_tz
     if message.content.startswith('$set_pref_tz'):
         if set_pref_tz(message):
@@ -717,17 +769,30 @@ async def on_message(message):
         await message.author.send(helper_str)
         return
 
-
     #get_pref_tz
     if message.content.startswith('$get_pref_tz'):
         await message.author.send('Your current preferred timezone is set to {0}'.format(get_pref_tz(message)))
 
+    #leave_guild
+    if message.content.startswith('$leave_guild'):
+        if type(message.channel) is discord.DMChannel:
+            await message.channel.send('This command needs to be sent from a guild channel.')
+            return
+        leave_guild(message)
+        await message.channel.send('No longer tracking voice channel activity. Bye!')
+        await message.guild.leave()
 
+    if message.content.startswith('$guild_stats'):
+        if type(message.channel) is discord.DMChannel:
+            await message.channel.send('This command needs to be sent from a guild channel.')
+            return
+        await message.channel.send(get_guild_stats(message))
 
     #handling direct messages?
     if type(message.channel) is discord.DMChannel:
         print('got DM!!!')
         return
+
 
 #for voice state updates
 #any time a member leaves or joins a voice channel
