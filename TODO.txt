@@ -14,5 +14,4 @@ other commands besides data visualization
 
 
 NEED:
-*find some sort of hosting solution
 *ability to upgrade to new bot version with little downtime (shutdown/re-start w/o gap of timespent data

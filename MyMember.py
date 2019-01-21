@@ -2,7 +2,9 @@
 #includes dict of known channels (keys are channel id in string, values are MyChannel instance)
 #also includes status information like in_channel, and activity (to be used later for activity time tracking)
 #guild_info is a dict (keys are guild id in string, values are datetime[pendulum] of when member was first spotted in guild voice channel)
+import discord
 import logging
+from MyActivity import MyGame
 from MyChannel import MyChannel
 import pendulum
 
@@ -12,25 +14,23 @@ class MyMember():
         self.id = member.id
         self.str_id = str(member.id)
         self.display_name = member.display_name
-        self.activity = member.activity
         self.creation_time = pendulum.now('UTC').replace(microsecond=0)
+        self.activity_info = {}
+        self.current_activities = []
         self.channel_info = {}
         self.guild_info = {}
         self.pref_tz = 'UTC'
         self.in_channel = False
-        if member.voice.channel is not None:
+        if member.voice is not None:
             self.in_channel = True
         if self.in_channel:
             self.current_channel_id = str(member.voice.channel.id)
-
-        #if there is an activity
-        #REWRITE ACTIVITY INFORMATION
-
-    #compares if current activity same as new activity
-    #returns TRUE if activities match
-    def compare_activity(self, activity):
-        if self.activity == activity:
-            return True
+        for activity in member.activities:
+            if type(activity) is discord.Game:
+                if activity.name not in self.activity_info.keys():
+                    self.current_activities.append(activity.name)
+                    current_activity = MyGame(activity)
+                    self.activity_info[activity.name] = current_activity
 
     #returns string of datetime since first seen anywhere
     def get_creation_time(self):
@@ -76,8 +76,14 @@ class MyMember():
     #helper method to set the current channel
     #sets channel as VoiceChannel object
     def set_current_channel(self, before, after):
+        #if channels didn't change, ignore
+        if before == after:
+            return
         #case for no voice channel -> voice channel
         if before is None and after is not None:
+            #check if joining afk channel, so we can ignore
+            if after.guild.afk_channel == after:
+                return
             current_channel = MyChannel(after)
             self.current_channel_id = current_channel.str_id
             self.current_channel = MyChannel(after)
@@ -90,8 +96,9 @@ class MyMember():
                 self.channel_info[current_channel.str_id] = current_channel
                 self.in_channel = True
             else:
-                self.channel_info[current_channel.str_id].set_join_channel()
-                self.channel_info[current_channel.str_id].in_channel = True
+                a_channel = self.channel_info[current_channel.str_id]
+                a_channel.set_join_channel()
+                self.channel_info[current_channel.str_id] = a_channel
             self.in_channel = True
             print('%s joined channel %s (known: %s)' % (self.display_name, after.name, str(len(self.channel_info.keys()))))
             logging.info('%s joined channel %s (known: %s)' % (self.display_name, after.name, str(len(self.channel_info.keys()))))
@@ -100,6 +107,9 @@ class MyMember():
 
         #case for voice channel -> no voice channel
         if before is not None and after is None:
+            #checks if leaving afk channel to prevent errors
+            if before.guild.afk_channel == before:
+                return
             self.channel_info[str(before.id)].set_leave_channel()
             self.channel_info[str(before.id)].update_time_spent()
             self.channel_info[str(before.id)].in_channel = False
@@ -114,11 +124,17 @@ class MyMember():
         if before is not None and after is not None:
             self.guild_status(str(after.guild.id))
             #checks if previous channel was known to avoid any issues
+            #if previous channel is unknown, ignores before channel time update
             if str(before.id) in self.channel_info.keys():
                 self.channel_info[str(before.id)].set_leave_channel()
                 self.channel_info[str(before.id)].update_time_spent()
-                self.channel_info[str(before.id)].in_channel = False
+            #check if new channel is afk channel
+            if after.guild.afk_channel == after:
+                logging.info('{0} is now in an afk channel, ignoring time spent in afk'.format(self.display_name))
+                print('{0} is now in an afk channel, ignoring time spent in afk'.format(self.display_name))
+                return
             current_channel = MyChannel(after)
+
             if current_channel.str_id not in self.channel_info.keys():
                 print('Adding %s to known channels for %s' % (current_channel.name, self.display_name))
                 logging.info('Adding %s to known channels for %s' % (current_channel.name, self.display_name))
@@ -150,24 +166,6 @@ class MyMember():
     def get_display_name(self):
         return str(self.display_name)
 
-    #returns activity as strings
-    def get_activity(self):
-        return str(self.activity)
-
-    #returns activity as activity object
-    def get_activity_raw(self):
-        return self.activity
-
-    #prints activity
-    def print_activity(self):
-        if self.activity is not None:
-            print(self.activity)
-        print('No activity.')
-
-    def print_activity_details(self):
-        if self.activity is not None:
-            print('In %s for %s' % (str(self.activity), str(self.activity_time)))
-
     #prints display_name
     def print_display_name(self):
         print(self.display_name)
@@ -175,3 +173,66 @@ class MyMember():
     #checks if channel id is in known channels
     def check_known_channels(self, id):
         return (id in self.channel_info.keys())
+
+    def read_activity(self, activity):
+        if activity.name in self.activity_info.keys():
+            self.activity_info[activity.name].update_start_time(pendulum.instance(activity.start, 'UTC'))
+        else:
+            new_act = MyGame(activity)
+            self.activity_info[activity.name] = new_act
+
+    #beginning actiivty tracking
+    def set_current_activity(self, before, after):
+        #make list of before/after activity names to compare
+        #filter out all activities that aren't game
+        time_stamp = pendulum.now('UTC')
+        before_act = []
+        before_name = []
+        after_act = []
+        after_name = []
+        for act in before.activities:
+            if type(act) is discord.Game:
+                before_act.append(act)
+                before_name.append(act.name)
+        for act in after.activities:
+            if type(act) is discord.Game:
+                after_act.append(act)
+                after_name.append(act.name)
+        #check if before/after are the same
+        if sorted(after_name) == sorted(before_name):
+            print('ignoring member update, activities are the same')
+            logging.info('ignoring member update, activities are the same')
+            return
+
+        #starting an activity
+        for act in [x for x in after_act if x.name not in before_name]:
+            new_act = MyGame(act)
+            if act.name not in self.activity_info.keys():
+                print('new activity found for {0} adding to current activities and getting start time'.format(after.display_name))
+                logging.info('new activity found for {0} adding to current activities and getting start time'.format(after.display_name))
+                self.activity_info[act.name] = new_act
+                self.current_activities.append(act.name)
+            if act.name in self.activity_info.keys():
+                #if not already in activity, update start time
+                #ignores if already in_game
+                if not self.activity_info[act.name].in_game:
+                    print('activity {0} started'.format(act))
+                    logging.info('activity {0} started'.format(act))
+                    self.current_activities.append(act.name)
+                    self.activity_info[act.name].update_start_time(new_act.start_time)
+
+        #ending an activity
+        for act in [x for x in before_act if x.name not in after_name]:
+            if act.name in self.current_activities:
+                #only end if already in_game
+                if self.activity_info[act.name].in_game:
+                    print('activity {0} ended'.format(act.name))
+                    logging.info('activity {0} ended'.format(act.name))
+                    self.current_activities.remove(act.name)
+                    self.activity_info[act.name].update_end_time(time_stamp)
+        return
+
+    #sets a leave_time for every game still in game
+    def set_activity_end_time(self, leave_time):
+        for game in [x for x in self.activity_info.values() if x.in_game]:
+            game.update_end_time(leave_time)
