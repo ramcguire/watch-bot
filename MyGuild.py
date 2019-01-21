@@ -2,6 +2,7 @@
 #id is guild id
 #name is string of guild name
 #voice_channels keeps track of guild voice channel ids
+import pendulum
 
 
 class MyGuild():
@@ -10,6 +11,7 @@ class MyGuild():
         self.str_id = str(guild.id)
         self.name = guild.name
         self.in_guild = True
+        self.creation_time = pendulum.now('UTC').replace(microsecond=0)
         self.voice_channels = []
 
     #helps iterate through a guild to make sure we have all voice channels represented

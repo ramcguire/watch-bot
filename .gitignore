@@ -10,3 +10,4 @@ __pycache__/MyGuild.cpython-37.pyc
 __pycache__/MyMember.cpython-37.pyc
 user_data.db
 .activity_log.log
+__pycache__/MyActivity.cpython-37.pyc
