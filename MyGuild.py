@@ -1,7 +1,7 @@
-#class to contain guild information
-#id is guild id
-#name is string of guild name
-#voice_channels keeps track of guild voice channel ids
+# class to contain guild information
+# id is guild id
+# name is string of guild name
+# voice_channels keeps track of guild voice channel ids
 import pendulum
 
 
@@ -14,7 +14,7 @@ class MyGuild():
         self.creation_time = pendulum.now('UTC').replace(microsecond=0)
         self.voice_channels = []
 
-    #helps iterate through a guild to make sure we have all voice channels represented
+    # helps iterate through a guild to make sure we have all voice channels represented
     def update_voice_channels(self, guild):
         for ch in guild.voice_channels:
             if str(ch.id) not in self.voice_channels:
