@@ -18,11 +18,15 @@ Current supported commands:
 
 [PREFIX]reset_user_stats - removes stats for respective user in this guild. Must confirm by sending CONFIRM in DM.
 
-[PREFIX]set_pref_tz - allows you to set a preferred timezone for data display. Syntax: $set_pref_tz Timezone_name (use https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
+[PREFIX]set_pref_tz - allows you to set a preferred timezone for data display. Syntax: $set_pref_tz Timezone_name (use    https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
 
 [PREFIX]get_pref_tz - sends you a message with your current timezone (defaults to UTC).
 
 [PREFIX]guild_stats - Prints a summary of collective time spent by users in voice channels in this guild.
+
+[PREFIX]gametime - Prints a summary of time spent in games that the bot has tracked.
+
+[PREFIX]guild_games - Prints the collective time users in this guild have spent in each game.
 
 [GUILD ADMIN COMMANDS]
 
@@ -31,12 +35,12 @@ Current supported commands:
 
 [BOT OWNER COMMANDS]
 
-reset_commands_run - resets commands_run from bot stats to 0.
+[PREFIX]reset_commands_run - resets commands_run from bot stats to 0.
 
-add_admin - adds users that are mentioned in this message to admins list.
+[PREFIX]add_admin - adds users that are mentioned in this message to admins list.
 
-rem_admin - removes users that are mentioned in this message from admins list.
+[PREFIX]rem_admin - removes users that are mentioned in this message from admins list.
 
-shutdown - best way to shutdown bot, cleans up all in_channel members and quits.
+[PREFIX]shutdown - best way to shutdown bot, cleans up all in_channel members and quits.
 
-re_init - removes all data and bot stats and starts fresh.
+[PREFIX]re_init - removes all data and bot stats and starts fresh.
