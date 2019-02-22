@@ -24,7 +24,7 @@ Current supported commands:
 
 [PREFIX]guild_stats - Prints a summary of collective time spent by users in voice channels in this guild.
 
-[PREFIX]gametime - Prints a summary of time spent in games that the bot has tracked.
+[PREFIX]gametime - Prints a summary of time spent in games that the bot has tracked. Use "gametime current" to see history of current activity.
 
 [PREFIX]guild_games - Prints the collective time users in this guild have spent in each game.
 

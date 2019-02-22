@@ -1,5 +1,6 @@
 import discord
 import logging
+import operator
 import os
 import pendulum
 import pickle
@@ -37,7 +38,7 @@ commands_str += c_prefix + 'set_pref_tz - allows you to set a preferred timezone
 commands_str += '-------------- use https://en.wikipedia.org/wiki/List_of_tz_database_time_zones to find your Timezone database name.\n'
 commands_str += c_prefix + 'get_pref_tz - sends you a message with your current timezone (defaults to UTC).\n'
 commands_str += c_prefix + 'guild_stats - Prints a summary of collective time spent by users in voice channels in this guild.'
-commands_str += c_prefix + 'gametime - Prints a summary of time spent in games that the bot has tracked.\n'
+commands_str += c_prefix + 'gametime - Prints a summary of time spent in games that the bot has tracked. Use \"gametime current\" to see history of current activity.\n'
 commands_str += c_prefix + 'guild_games - Prints the collective time users in this guild have spent in each game.\n'
 
 commands_str_local_admin = '[GUILD ADMIN] ' + c_prefix + 'reset_guild_stats (owner/admin of guild only) - removes all tracked time for all users in guild.\n'
@@ -281,11 +282,11 @@ def set_leave_all():
     for member in members_in_game:
         for game in member.current_activity:
             ended_game = member.activity_info[game]
-            ended_game.update_end_time(man_leave_time)
-            ended_game.total_time += ((man_leave_time - ended_game.start_time).total_seconds())
+            ended_game.update_end_time(timestamp)
+            ended_game.total_time += ((timestamp - ended_game.start_time).total_seconds())
             ended_game.in_game = False
             member.activity_info[game] = ended_game
-        u_data[member.str_id] = members
+        u_data[member.str_id] = member
     u_data.commit()
 
 
@@ -301,13 +302,13 @@ def on_bad_shutdown():
         logging.warning('cleaning up users who were left as in channel (bad shutdown)')
         man_leave_time = bot_stats['running_since']
         for member in members_in_game:
-            for game in members.current_activity:
+            for game in member.current_activity:
                 ended_game = member.activity_info[game]
                 ended_game.update_end_time(man_leave_time)
                 ended_game.total_time += ((man_leave_time - ended_game.start_time).total_seconds())
                 ended_game.in_game = False
                 member.activity_info[game] = ended_game
-            u_data[member.str_id] = members
+            u_data[member.str_id] = member
         for members in members_in_channel:
             members.adjust_leave_time(man_leave_time)
             u_data[members.str_id] = members
@@ -385,6 +386,21 @@ def get_full_timesummary(message):
     return ret_str
 
 
+def get_current_game_time(message):
+    increment_commands_run()
+    member = read_member(message.author)
+    if member is None:
+        return
+    if len(member.activity_info):
+        current_games = [x for x in member.activity_info.values() if x.in_game]
+        if len(current_games):
+            return_str = '{0}\'s current games:\n'.format(message.author.display_name)
+            for game in (sorted(current_games, key=operator.attrgetter('name'))):
+                return_str += '{0} - {1}\n'.format(str(game.name), format_seconds(game.get_total_time_in_game()))
+            return return_str
+        return '{0} has no current game.\n'.format(message.author.display_name)
+
+
 def get_game_time(message):
     increment_commands_run()
     member = read_member(message.author)
@@ -393,7 +409,8 @@ def get_game_time(message):
     # check if there is any activity_info
     if len(member.activity_info):
         return_str = '{0}\'s total time spent in game:\n'.format(message.author.display_name)
-        for game in member.activity_info.values():
+        #(sorted(member.activity_info.values(), key=operator.attrgetter('name')))
+        for game in (sorted(member.activity_info.values(), key=operator.attrgetter('name'))):
             return_str += '{0} - {1}\n'.format(str(game.name), format_seconds(game.get_total_time_in_game()))
         return return_str
     return 'No game data found for {0}'.format(message.author.display_name)
@@ -634,7 +651,7 @@ def re_init(message):
 # clear log file
 # maybe save it later?
 def clear_log_file():
-    with open('./activity_log.log', 'w') as file:
+    with open('./activity_log.log', 'w'):
         pass
 
 
@@ -795,7 +812,7 @@ async def on_message(message):
 
             def check(m):
                 return m.content == 'CONFIRM'
-            msg = await client.wait_for('message', check=check)
+            await client.wait_for('message', check=check)
             reset_my_stats(message)
             return
         reset_user_stats(message)
@@ -839,6 +856,7 @@ async def on_message(message):
     # get_pref_tz
     if message.content.startswith(c_prefix + 'get_pref_tz'):
         await message.author.send('Your current preferred timezone is set to {0}'.format(get_pref_tz(message)))
+        return
 
     # leave_guild
     if message.content.startswith(c_prefix + 'leave_guild'):
@@ -848,26 +866,28 @@ async def on_message(message):
         leave_guild(message)
         await message.channel.send('No longer tracking voice channel activity. Bye!')
         await message.guild.leave()
+        return
 
     if message.content.startswith(c_prefix + 'guild_stats'):
         if type(message.channel) is discord.DMChannel:
             await message.channel.send('This command needs to be sent from a guild channel.')
             return
         await message.channel.send(get_guild_stats(message))
+        return
+
+    if message.content == str(c_prefix + 'gametime current'):
+        await message.channel.send(get_current_game_time(message))
+        return
 
     if message.content.startswith(c_prefix + 'gametime'):
         await message.channel.send(get_game_time(message))
+        return
 
     if message.content.startswith(c_prefix + 'guild_games'):
         if type(message.channel) is discord.DMChannel:
             await message.channel.send('This command needs to be sent from a guild channel.')
             return
         await message.channel.send(get_guild_game_time(message))
-
-    # handling direct messages?
-    if type(message.channel) is discord.DMChannel:
-        print('got DM!!!')
-        return
 
 
 # for voice state updates
@@ -894,6 +914,7 @@ async def on_member_update(before, after):
     current_member.process_activities(before, after)
     u_data[current_member.str_id] = current_member
     u_data.commit()
+    return
 
 
 on_bot_init()
