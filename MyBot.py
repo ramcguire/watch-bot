@@ -517,16 +517,9 @@ def reset_guild_stats(message):
 
 
 # helper method to format seconds into a readable time
-<<<<<<< HEAD
 # returns as a string, using pendulum duration.in_words()
 def format_seconds(sec):
     return str((pendulum.duration(seconds=sec)).in_words())
-=======
-# returns as a string
-def format_seconds(sec):
-    duration = pendulum.duration(seconds=sec)
-    return duration.in_words()
->>>>>>> 6fdb82c6baba9c984adacb42b061b4c67b420bc9
 
 
 # helper method to determine if owner (returns True if owner)

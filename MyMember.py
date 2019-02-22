@@ -36,7 +36,6 @@ class MyMember():
                     current_activity = MyGame(activity)
                     self.activity_info[activity.name] = current_activity
 
-
     def get_guild_time(self, guild_id):
         if str(guild_id) in self.guild_info:
             return self.guild_info[str(guild_id)].replace(microsecond=0)

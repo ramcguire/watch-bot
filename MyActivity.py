@@ -47,6 +47,7 @@ class MyGame():
 
     # returns total time in game
     def get_total_time_in_game(self):
+        time = self.total_time
         if self.in_game:
             time += ((pendulum.now('UTC') - self.start_time).total_seconds())
         return time
