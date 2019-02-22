@@ -104,7 +104,6 @@ class MyMember():
             self.in_channel = True
             print('%s joined channel %s (known: %s)' % (self.display_name, after.name, str(len(self.channel_info.keys()))))
             logging.info('%s joined channel %s (known: %s)' % (self.display_name, after.name, str(len(self.channel_info.keys()))))
-            self.print_known_channels()
             return
 
         # case for voice channel -> no voice channel
