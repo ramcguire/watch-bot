@@ -3,6 +3,7 @@ import logging
 import os
 import pendulum
 import pickle
+from sortedcontainers import SortedDict
 
 from sqlitedict import SqliteDict
 from threading import Timer
@@ -20,11 +21,11 @@ logging.basicConfig(filename='.activity_log.log', level=logging.INFO)
 
 # token for discord bot (from discord api)
 with open('discord_token.txt', 'r') as myfile:
-    TOKEN = myfile.read()
+    TOKEN = myfile.readline()
 
 # can run shutdown/reset commands run
 with open('owner_id.txt', 'r') as myfile:
-    owner_id = int(myfile.read())
+    owner_id = int(myfile.readline())
 
 # commands that are displayed with $commands
 commands_str = 'Current commands (only valid for guild the $commands message was sent in):\n'
@@ -36,7 +37,8 @@ commands_str += c_prefix + 'set_pref_tz - allows you to set a preferred timezone
 commands_str += '-------------- use https://en.wikipedia.org/wiki/List_of_tz_database_time_zones to find your Timezone database name.\n'
 commands_str += c_prefix + 'get_pref_tz - sends you a message with your current timezone (defaults to UTC).\n'
 commands_str += c_prefix + 'guild_stats - Prints a summary of collective time spent by users in voice channels in this guild.'
-
+commands_str += c_prefix + 'gametime - Prints a summary of time spent in games that the bot has tracked.\n'
+commands_str += c_prefix + 'guild_games - Prints the collective time users in this guild have spent in each game.\n'
 
 commands_str_local_admin = '[GUILD ADMIN] ' + c_prefix + 'reset_guild_stats (owner/admin of guild only) - removes all tracked time for all users in guild.\n'
 commands_str_local_admin = '[GUILD ADMIN] ' + c_prefix + 'leave_guild (owner/admin of guild only) - leaves guild, but does not remove tracked information. Bot can be re-added.\n'
@@ -221,15 +223,16 @@ def add_new_member(member):
 
 
 # handler for member reading
-# checks if member is already known, if not, calls add new member
-# returns existing member or new member object
+# checks if member is already known, if not, adds new member
+# returns member object to be worked on
 def read_member(member):
     if str(member.id) not in u_data.keys():
         if not member.bot:
             new_mem = add_new_member(member)
+            #new_mem.process_activities()
             return u_data[new_mem.str_id]
         else:
-            print('found bot user in read_member: ignoring')
+            print('found bot {0} in read_member: ignoring'.format(member.display_name))
             logging.info('found bot user in read_member: ignoring')
             return None
     # returns member object
@@ -251,15 +254,16 @@ def guild_join(guild):
     log_str = 'initializing voice channels in guild \"{0}\"'.format(new_guild.name)
     print(log_str)
     logging.info(log_str)
+    current_guild = g_data[str(guild.id)]
     for ch in guild.voice_channels:
-        current_guild = g_data[new_guild.str_id]
         current_guild.update_voice_channels(guild)
         for mem in ch.members:
             current_member = read_member(mem)
             if current_member is None:
                 pass
-            current_member.set_current_channel(None, ch)
-            u_data[current_member.str_id] = current_member
+            else:
+                current_member.set_current_channel(None, ch)
+                u_data[current_member.str_id] = current_member
     g_data.commit()
     u_data.commit()
 
@@ -268,10 +272,20 @@ def guild_join(guild):
 # used before shutting down/updating
 # updates time for all users currently in channels
 def set_leave_all():
+    timestamp = pendulum.now('UTC')
     members_in_channel = [x for x in u_data.values() if x.in_channel]
+    members_in_game = [x for x in u_data.values() if len(x.current_activities)]
     for member in members_in_channel:
-        member.adjust_leave_time(pendulum.now('UTC'))
+        member.adjust_leave_time(timestamp)
         u_data[member.str_id] = member
+    for member in members_in_game:
+        for game in member.current_activity:
+            ended_game = member.activity_info[game]
+            ended_game.update_end_time(man_leave_time)
+            ended_game.total_time += ((man_leave_time - ended_game.start_time).total_seconds())
+            ended_game.in_game = False
+            member.activity_info[game] = ended_game
+        u_data[member.str_id] = members
     u_data.commit()
 
 
@@ -283,13 +297,17 @@ def on_bad_shutdown():
     members_in_channel = [x for x in u_data.values() if x.in_channel]
     members_in_game = [x for x in u_data.values() if len(x.current_activities)]
     if load_running_since():
-        log_str = 'cleaning up users who were left as in channel (bad shutdown)'
-        print(log_str)
-        logging.warning(log_str)
+        print('cleaning up users who were left as in channel (bad shutdown)')
+        logging.warning('cleaning up users who were left as in channel (bad shutdown)')
         man_leave_time = bot_stats['running_since']
-        for members in members_in_game:
-            members.set_activity_end_time(man_leave_time)
-            u_data[members.str_id] = members
+        for member in members_in_game:
+            for game in members.current_activity:
+                ended_game = member.activity_info[game]
+                ended_game.update_end_time(man_leave_time)
+                ended_game.total_time += ((man_leave_time - ended_game.start_time).total_seconds())
+                ended_game.in_game = False
+                member.activity_info[game] = ended_game
+            u_data[member.str_id] = members
         for members in members_in_channel:
             members.adjust_leave_time(man_leave_time)
             u_data[members.str_id] = members
@@ -355,7 +373,7 @@ def get_full_timesummary(message):
         # Loop through sorted channel names
         for ch in chan_info:
             # get base time in channel
-            time_in_channel = ch.total_time
+            time_in_channel = ch.get_total_time_in_channel()
             # add time information to time summary
             ch_summary = '{0} - {1}\n'.format(ch.mention, format_seconds(time_in_channel))
             ret_str += ch_summary
@@ -372,12 +390,31 @@ def get_game_time(message):
     member = read_member(message.author)
     if member is None:
         return
+    # check if there is any activity_info
     if len(member.activity_info):
         return_str = '{0}\'s total time spent in game:\n'.format(message.author.display_name)
         for game in member.activity_info.values():
             return_str += '{0} - {1}\n'.format(str(game.name), format_seconds(game.get_total_time_in_game()))
         return return_str
     return 'No game data found for {0}'.format(message.author.display_name)
+
+
+def get_guild_game_time(message):
+    increment_commands_run()
+    guild_activities = SortedDict()
+    for mem in [x for x in message.guild.members if not x.bot]:
+        this_mem = read_member(mem)
+        if this_mem is None:
+            pass
+        else:
+            for activity in this_mem.activity_info.keys():
+                if activity not in guild_activities.keys():
+                    guild_activities[activity] = 0
+                guild_activities[activity] += this_mem.activity_info[activity].get_total_time_in_game()
+    return_str = 'Activity summary for guild \"{0}\":\n'.format(message.guild.name)
+    for key in guild_activities.keys():
+        return_str += '{0} - {1}\n'.format(key, format_seconds(guild_activities[key]))
+    return return_str
 
 
 # calculates time_spent when passed a message obj
@@ -480,9 +517,16 @@ def reset_guild_stats(message):
 
 
 # helper method to format seconds into a readable time
+<<<<<<< HEAD
 # returns as a string, using pendulum duration.in_words()
 def format_seconds(sec):
     return str((pendulum.duration(seconds=sec)).in_words())
+=======
+# returns as a string
+def format_seconds(sec):
+    duration = pendulum.duration(seconds=sec)
+    return duration.in_words()
+>>>>>>> 6fdb82c6baba9c984adacb42b061b4c67b420bc9
 
 
 # helper method to determine if owner (returns True if owner)
@@ -545,6 +589,7 @@ def bot_ready():
     for member in client.get_all_members():
         mem = read_member(member)
         if mem is not None:
+            mem.process_activities(member, member)
             for act in member.activities:
                 if type(act) is discord.Game:
                     mem.read_activity(act)
@@ -820,6 +865,12 @@ async def on_message(message):
     if message.content.startswith(c_prefix + 'gametime'):
         await message.channel.send(get_game_time(message))
 
+    if message.content.startswith(c_prefix + 'guild_games'):
+        if type(message.channel) is discord.DMChannel:
+            await message.channel.send('This command needs to be sent from a guild channel.')
+            return
+        await message.channel.send(get_guild_game_time(message))
+
     # handling direct messages?
     if type(message.channel) is discord.DMChannel:
         print('got DM!!!')
@@ -847,10 +898,9 @@ async def on_member_update(before, after):
     current_member = read_member(before)
     if current_member is None:
         return
-    current_member.set_current_activity(before, after)
+    current_member.process_activities(before, after)
     u_data[current_member.str_id] = current_member
     u_data.commit()
-    return
 
 
 on_bot_init()
