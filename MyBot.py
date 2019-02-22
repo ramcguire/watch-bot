@@ -480,30 +480,9 @@ def reset_guild_stats(message):
 
 
 # helper method to format seconds into a readable time
-# returns as a string
-def format_seconds(seconds):
-    time = round(seconds)
-    time_str = ''
-    day = '0'
-    hour = '0'
-    minute = '0'
-    if time > 86400:
-        day = str(time // 86400)
-        time = time % 86400
-    if time > 3600:
-        hour = str(time // 3600)
-        time = time % 3600
-    if time > 60:
-        minute = str(time // 60)
-        time = time % 60
-    time_str = '{0} seconds'.format(time)
-    if not minute == '0':
-        time_str = '{0} minutes and {1}'.format(minute, time_str)
-    if not hour == '0':
-        time_str = '{0} hour(s), {1}'.format(hour, time_str)
-    if not day == '0':
-        time_str = '{0} day(s), {1}'.format(day, time_str)
-    return time_str
+# returns as a string, using pendulum duration.in_words()
+def format_seconds(sec):
+    return str((pendulum.duration(seconds=sec)).in_words())
 
 
 # helper method to determine if owner (returns True if owner)
