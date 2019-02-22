@@ -48,14 +48,8 @@ class MyGame():
     # returns total time in game
     def get_total_time_in_game(self):
         if self.in_game:
-<<<<<<< HEAD
             time += ((pendulum.now('UTC') - self.start_time).total_seconds())
         return time
-=======
-            print('found in_game still')
-            return (self.total_time + self.calc_time_since_start())
-        return self.total_time
->>>>>>> 6fdb82c6baba9c984adacb42b061b4c67b420bc9
 
     def calc_time_since_start(self):
         return ((pendulum.now('UTC') - self.start_time).total_seconds())
