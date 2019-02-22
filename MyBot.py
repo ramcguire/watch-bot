@@ -302,7 +302,7 @@ def on_bad_shutdown():
         logging.warning('cleaning up users who were left as in channel (bad shutdown)')
         man_leave_time = bot_stats['running_since']
         for member in members_in_game:
-            for game in member.current_activity:
+            for game in member.current_activities:
                 ended_game = member.activity_info[game]
                 ended_game.update_end_time(man_leave_time)
                 ended_game.total_time += ((man_leave_time - ended_game.start_time).total_seconds())

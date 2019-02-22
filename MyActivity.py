@@ -34,10 +34,6 @@ class MyGame():
     # helper method to update timestamp/in_game attribute
     # called when activity is started
     def update_start_time(self, start_time):
-        if self.in_game:
-            logging.warning(
-                'found already in_game while trying toupdate_start_time')
-            print('found already in_game while trying to update_start_time')
         self.in_game = True
         self.start_time = start_time
 
