@@ -6,6 +6,7 @@ import pendulum
 import pickle
 from sortedcontainers import SortedDict
 
+from discord.ext import commands
 from sqlitedict import SqliteDict
 from threading import Timer
 
@@ -17,6 +18,8 @@ from operator import attrgetter
 # try to modularize the command prefix
 c_prefix = '!'
 
+
+
 # setup logging to file (ignoring debug logging)
 logging.basicConfig(filename='.activity_log.log', level=logging.INFO)
 
@@ -27,6 +30,8 @@ with open('discord_token.txt', 'r') as myfile:
 # can run shutdown/reset commands run
 with open('owner_id.txt', 'r') as myfile:
     owner_id = int(myfile.readline())
+
+bot = commands.Bot(command_prefix=c_prefix, owner_id=owner_id)
 
 # commands that are displayed with $commands
 commands_str = 'Current commands (only valid for guild the $commands message was sent in):\n'
@@ -280,7 +285,7 @@ def set_leave_all():
         member.adjust_leave_time(timestamp)
         u_data[member.str_id] = member
     for member in members_in_game:
-        for game in member.current_activity:
+        for game in member.current_activities:
             ended_game = member.activity_info[game]
             ended_game.update_end_time(timestamp)
             ended_game.total_time += ((timestamp - ended_game.start_time).total_seconds())
@@ -585,7 +590,7 @@ def on_bot_init():
 
 
 def bot_ready():
-    log_str = 'We have logged in as {0.user}'.format(client)
+    log_str = 'We have logged in as {0.user}'.format(bot)
     print(log_str)
     logging.info(log_str)
     print('initializing guilds and channels')
@@ -593,10 +598,10 @@ def bot_ready():
     print('now looping through current guilds')
     logging.info('now looping through current guilds')
     # gets list of guilds
-    for g in client.guilds:
+    for g in bot.guilds:
         guild_join(g)
     # checks all visible members for current activities
-    for member in client.get_all_members():
+    for member in bot.get_all_members():
         mem = read_member(member)
         if mem is not None:
             mem.process_activities(member, member)
@@ -617,35 +622,33 @@ def bot_ready():
 # method to help fully re_init bot and data
 # will lose all tracked information!
 def re_init(message):
-    # if is authorized
-    if is_owner(message.author.id):
-        logging.info('recieved ' + c_prefix + 're_init command from {0}'.format(message.author.display_name))
-        # clear all tracked data (will be re-initialized in on_bot_init)
-        g_data.clear()
-        u_data.clear()
-        bot_stats.clear()
-        g_data.commit()
-        u_data.commit()
-        bot_stats.commit()
-        # remove admins file and reset to owner_id
-        if os.path.exists('./admins.p'):
-            os.remove('./admins.p')
-        admins = []
-        admins.append(str(owner_id))
-        update_admins()
-        # reset commands run and set shutdown = True
-        bot_stats['commands_run'] = 0
-        bot_stats['shutdown'] = True
-        # cancels timer for re-init later
-        global bkg_timer
-        bkg_timer.cancel()
-        bkg_timer = None
-        logging.info('Canceled bkg_timer as part of re_init')
-        # clear the log file??? why do we have logging in this function....
-        # maybe change....
-        clear_log_file()
-        # finally, call on_bot_init
-        bot_ready()
+    logging.info('recieved ' + c_prefix + 're_init command from {0}'.format(message.author.display_name))
+    # clear all tracked data (will be re-initialized in on_bot_init)
+    g_data.clear()
+    u_data.clear()
+    bot_stats.clear()
+    g_data.commit()
+    u_data.commit()
+    bot_stats.commit()
+    # remove admins file and reset to owner_id
+    if os.path.exists('./admins.p'):
+        os.remove('./admins.p')
+    admins = []
+    admins.append(str(owner_id))
+    update_admins()
+    # reset commands run and set shutdown = True
+    bot_stats['commands_run'] = 0
+    bot_stats['shutdown'] = True
+    # cancels timer for re-init later
+    global bkg_timer
+    bkg_timer.cancel()
+    bkg_timer = None
+    logging.info('Canceled bkg_timer as part of re_init')
+    # clear the log file??? why do we have logging in this function....
+    # maybe change....
+    clear_log_file()
+    # finally, call on_bot_init
+    bot_ready()
 
 
 # clear log file
@@ -658,25 +661,22 @@ def clear_log_file():
 # function for shutting down bot
 # cleans up all in channel connections and updates stats
 def shutdown(message):
-    if is_owner(message.author.id):
-        increment_commands_run()
-        logging.info('recieved ' + c_prefix + 'shutdown command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
-        # cancel bkg_timer, and set it to None
-        global bkg_timer
-        bkg_timer.cancel()
-        bkg_timer = None
-        print('Canceled timer, finishing shutdown procedures')
-        logging.info('Canceled timer, finishing shutdown procedures')
-        # make all users leave channel and update shutdown value
-        set_leave_all()
-        bot_stats['shutdown'] = True
-        update_bot_stats()
-        # close sqlitedict connections
-        u_data.close()
-        bot_stats.close()
-        logging.info('closing client and quitting script')
-    else:
-        logging.warning('INVALID ' + c_prefix + 'shutdown command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
+    increment_commands_run()
+    logging.info('recieved ' + c_prefix + 'shutdown command from {0}'.format(message.author.display_name))
+    # cancel bkg_timer, and set it to None
+    global bkg_timer
+    bkg_timer.cancel()
+    bkg_timer = None
+    print('Canceled timer, finishing shutdown procedures')
+    logging.info('Canceled timer, finishing shutdown procedures')
+    # make all users leave channel and update shutdown value
+    set_leave_all()
+    bot_stats['shutdown'] = True
+    update_bot_stats()
+    # close sqlitedict connections
+    u_data.close()
+    bot_stats.close()
+    logging.info('closing client and quitting script')
 
 
 def set_pref_tz(message):
@@ -740,17 +740,51 @@ def leave_guild(message):
 # ------------------------------------------------------------------------------------------------------------------------#
 
 
-@client.event
+@bot.event
 async def on_ready():
     bot_ready()
 
 
 # called when bot is added to a guild
 # just calls guild_join() method
-@client.event
+@bot.event
 async def on_guild_join(guild):
     guild_join(guild)
 
+
+@bot.command()
+async def say_hello(ctx):
+    await ctx.send('hello!')
+
+
+@bot.command()
+async def timespend(ctx):
+    if not ctx.message.guild:
+        summary_str = 'Full voice channel time information:\n'
+        summary_str += get_full_timesummary(ctx.message)
+        await ctx.send(summary_str)
+        return
+    await ctx.send(get_timesummary(ctx.message))
+
+
+@bot.command()
+@commands.is_owner()
+async def shutdown2(ctx):
+    shutdown(ctx.message)
+    await bot.close()
+    exit()
+
+
+@bot.command()
+@commands.is_owner()
+async def _add_admin(ctx):
+
+    return
+
+@bot.command()
+@commands.is_owner()
+async def reinit(ctx):
+    re_init(ctx.message)
 
 # event for all messages, handles commands
 # look into using bot functionality from discord library
@@ -892,7 +926,7 @@ async def on_message(message):
 
 # for voice state updates
 # any time a member leaves or joins a voice channel
-@client.event
+@bot.event
 async def on_voice_state_update(member, before, after):
     if member.bot:
         print('bot user, ignoring')
@@ -918,4 +952,6 @@ async def on_member_update(before, after):
 
 
 on_bot_init()
-client.run(TOKEN)
+bot.run(TOKEN, bot=True, reconnect=True)
+
+#client.run(TOKEN)
