@@ -8,8 +8,6 @@ import pendulum
 import pickle
 import traceback, sys
 
-#import members
-
 from discord.ext import commands
 from sortedcontainers import SortedDict
 
@@ -23,7 +21,6 @@ from operator import attrgetter
 globals.init()
 
 bot = commands.Bot(command_prefix=globals.c_prefix, owner_id=globals.owner_id)
-
 
 
 # commands that are displayed with $commands
@@ -53,7 +50,7 @@ commands_str_owner += '[OWNER] ' + globals.c_prefix + 're_init - removes all dat
 
 client = discord.Client()
 
-
+'''
 # helper method to increment commands run in bot_stats dict
 def increment_commands_run():
     if 'commands_run' in globals.bot_stats.keys():
@@ -66,7 +63,7 @@ def increment_commands_run():
         logging.warning('no current bot stats found, starting count now')
         globals.bot_stats['commands_run'] = 1
         globals.bot_stats.commit()
-
+'''
 
 # resets commands_run stat
 def reset_commands_run(message):
@@ -95,7 +92,7 @@ def get_commands(message):
 # returns bot_stats string
 def get_bot_stats(message):
     # increment commands count
-    increment_commands_run()
+    globals.increment_commands_run()
     log_str = 'recieved ' + globals.c_prefix + 'bot_stats command from {0}'.format(message.author.display_name)
     print(log_str)
     logging.info(log_str)
@@ -117,7 +114,7 @@ def add_admin(message):
     # adds all members that weren't already in admins list to admins list
     if is_owner(message.author.id):
         logging.info('recieved (VALID) ' + globals.c_prefix + 'addadmin command from {0}'.format(message.author.display_name))
-        increment_commands_run()
+        globals.increment_commands_run()
         # only iterates through members not already in admin list
         list_new_admins = [x for x in message.mentions if str(x.id) not in globals.admins]
         for member in list_new_admins:
@@ -146,7 +143,7 @@ def list_admins(message):
 def remove_admin(message):
     if is_owner(message.author.id):
         logging.info('recieved (VALID) ' + globals.c_prefix + 'rem_admin command from {0}'.format(message.author.display_name, message.guild.name))
-        increment_commands_run()
+        globals.increment_commands_run()
         list_rem_admins = [x for x in message.mentions if str(x.id) in globals.admins]
         for member in list_rem_admins:
             globals.admins.remove(str(member.id))
@@ -163,7 +160,7 @@ def update_running_since():
 
 
 # updates all bot stats
-# uses BackgroundTimer for regular updates (currently every 60s)
+# uses bkg_timer for regular updates (currently every 60s)
 def update_bot_stats():
     active_guilds = [x for x in globals.g_data.values() if x.in_guild]
     guild_count = len(active_guilds)
@@ -305,7 +302,7 @@ def on_bad_shutdown():
 # returns a collective timesummary for users spent in each voice channel
 # only works in guild
 def get_guild_stats(message):
-    increment_commands_run()
+    globals.increment_commands_run()
     mem = read_member(message.author)
     total_time = 0.0
     ret_str = 'User voice channel activity in guild \"{0}\"\n'.format(message.guild.name)
@@ -337,7 +334,7 @@ def get_guild_stats(message):
 
 # calculates timespent for user in all tracked guilds
 def get_full_timesummary(message):
-    increment_commands_run()
+    globals.increment_commands_run()
     ret_str = ''
     member_id = str(message.author.id)
     log_str = 'recieved ' + globals.c_prefix + 'timespent (full timesummary) command from \"{0}\" DMChannel'.format(message.author.display_name)
@@ -367,7 +364,7 @@ def get_full_timesummary(message):
 
 
 def get_current_game_time(message):
-    increment_commands_run()
+    globals.increment_commands_run()
     member = read_member(message.author)
     if member is None:
         return
@@ -382,7 +379,7 @@ def get_current_game_time(message):
 
 
 def get_game_time(message):
-    increment_commands_run()
+    globals.increment_commands_run()
     member = read_member(message.author)
     if member is None:
         return
@@ -397,7 +394,7 @@ def get_game_time(message):
 
 
 def get_guild_game_time(message):
-    increment_commands_run()
+    globals.increment_commands_run()
     guild_activities = SortedDict()
     for mem in [x for x in message.guild.members if not x.bot]:
         this_mem = read_member(mem)
@@ -417,7 +414,7 @@ def get_guild_game_time(message):
 # calculates time_spent when passed a message obj
 # returns result as string
 def get_timesummary(message):
-    increment_commands_run()
+    globals.increment_commands_run()
     guild_id = str(message.guild.id)
     member_id = str(message.author.id)
     log_str = 'recieved ' + globals.c_prefix + 'timespent command from \"{0}\" in guild \"{1}\"'.format(message.author.display_name, message.guild.name)
@@ -454,7 +451,7 @@ def get_timesummary(message):
 
 # method that resets one users stats in all tracked guilds
 def reset_my_stats(message):
-    increment_commands_run()
+    globals.increment_commands_run()
     logging.info('recieved ' + globals.c_prefix + 'reset_user_stats command from {0} in DMChannel'.format(message.author.display_name))
     if str(message.author.id) in globals.u_data.keys():
         member = globals.u_data[str(message.author.id)]
@@ -467,7 +464,7 @@ def reset_my_stats(message):
 # method for resetting individual user stats
 # returns string based on input message
 def reset_user_stats(message):
-    increment_commands_run()
+    globals.increment_commands_run()
     logging.info('recieved ' + globals.c_prefix + 'reset_user_stats command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
     this_guild = message.guild.id
     deletable = []
@@ -490,7 +487,7 @@ def reset_user_stats(message):
 def reset_guild_stats(message):
     if is_owner(message.author.id) or is_bot_admin(message.author.id) or is_local_admin(message.author.id):
         logging.info('recieved (VALID) ' + globals.c_prefix + 'rem_guild_stats command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
-        increment_commands_run()
+        globals.increment_commands_run()
         log_str = 'removing all stats from guild \"{0}\"'.format(message.guild.name)
         print(log_str)
         logging.info(log_str)
@@ -587,8 +584,9 @@ def bot_ready():
     update_bot_stats()
     globals.u_data.commit()
     globals.bot_stats.commit()
-    globals.bkg_timer = Timer(60.0, update_bot_stats)
-    globals.bkg_timer.start()
+    global bkg_timer
+    bkg_timer = Timer(60.0, update_bot_stats)
+    bkg_timer.start()
     print('Finished init, starting timer for frequent bot_stats updates')
     logging.info('Finished init, starting timer for frequent bot_stats updates')
 
@@ -614,8 +612,9 @@ def re_init(message):
     globals.bot_stats['commands_run'] = 0
     globals.bot_stats['shutdown'] = True
     # cancels timer for re-init later
-    globals.bkg_timer.cancel()
-    globals.bkg_timer = None
+    global bkg_timer
+    bkg_timer.cancel()
+    bkg_timer = None
     logging.info('Canceled bkg_timer as part of re_init')
     # clear the log file??? why do we have logging in this function....
     # maybe change....
@@ -634,11 +633,12 @@ def clear_log_file():
 # function for shutting down bot
 # cleans up all in channel connections and updates stats
 def shutdown(message):
-    increment_commands_run()
+    globals.increment_commands_run()
     logging.info('recieved ' + globals.c_prefix + 'shutdown command from {0}'.format(message.author.display_name))
     # cancel bkg_timer, and set it to None
-    globals.bkg_timer.cancel()
-    globals.bkg_timer = None
+    global bkg_timer
+    bkg_timer.cancel()
+    bkg_timer = None
     print('Canceled timer, finishing shutdown procedures')
     logging.info('Canceled timer, finishing shutdown procedures')
     # make all users leave channel and update shutdown value
@@ -659,7 +659,7 @@ def set_pref_tz(message):
     if len(arguments):
         # check if argument is a valid timezone name
         if arguments[0] in pendulum.timezones:
-            increment_commands_run()
+            globals.increment_commands_run()
             # set and update pref_tz
             member = read_member(message.author)
             member.pref_tz = arguments[0]
@@ -672,7 +672,7 @@ def set_pref_tz(message):
 
 # returns the pref_tz of the author
 def get_pref_tz(message):
-    increment_commands_run()
+    globals.increment_commands_run()
     member = read_member(message.author)
     if member is None:
         return None
@@ -684,7 +684,7 @@ def get_pref_tz(message):
 def leave_guild(message):
     # if user is authorized to run this command
     if is_owner(message.author.id) or is_local_admin(message.author.id):
-        increment_commands_run()
+        globals.increment_commands_run()
         logging.info('recieved ' + globals.c_prefix + 'leave_guild command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
         # iterate through members in voice channels and adjust leave time
         for channels in message.guild.voice_channels:

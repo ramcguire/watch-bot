@@ -17,7 +17,6 @@ def init():
     global continue_timer
     global admins
     global c_prefix
-    global bkg_timer
 
     # setup logging to file (ignoring debug logging)
     logging.basicConfig(filename='.activity_log.log', level=logging.INFO)
@@ -46,3 +45,17 @@ def init():
         pickle.dump(admins, open('./admins.p', 'wb'))
 
     admins = pickle.load(open('./admins.p', 'rb'))
+
+    # helper method to increment commands run in bot_stats dict
+
+def increment_commands_run():
+    if 'commands_run' in bot_stats.keys():
+        cmds_run = bot_stats['commands_run']
+        cmds_run += 1
+        bot_stats['commands_run'] = cmds_run
+        bot_stats.commit()
+    else:
+        print('no current bot stats found, starting count now')
+        logging.warning('no current bot stats found, starting count now')
+        bot_stats['commands_run'] = 1
+        bot_stats.commit()

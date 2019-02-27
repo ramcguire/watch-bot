@@ -1,4 +1,5 @@
 import asyncio
+import globals
 from discord.ext import commands
 
 
@@ -11,6 +12,7 @@ class MembersCog(commands.Cog):
     async def sayhello(self, ctx):
 
         '''Simple hello world!'''
+        globals.increment_commands_run()
         await ctx.send("hello world!")
 
 
