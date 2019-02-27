@@ -7,5 +7,4 @@ bot_stats.db*
 guild_data.db*
 user_data.db*
 .activity_log.log
-*__pycache__/*
-cogs/__pycache/*
+**__pycache__/*
