@@ -1,5 +1,4 @@
 import asyncio
-import discord
 from discord.ext import commands
 
 
@@ -13,3 +12,8 @@ class MembersCog(commands.Cog):
 
         '''Simple hello world!'''
         await ctx.send("hello world!")
+
+
+
+def setup(bot):
+    bot.add_cog(MembersCog(bot))

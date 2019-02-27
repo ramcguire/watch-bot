@@ -6,9 +6,9 @@ import operator
 import os
 import pendulum
 import pickle
-import traceback
+import traceback, sys
 
-import members
+#import members
 
 from discord.ext import commands
 from sortedcontainers import SortedDict
@@ -924,14 +924,15 @@ async def on_member_update(before, after):
     return
 
 
-initial_extensions = [members.MembersCog]
+initial_extensions = ['cogs.members']
 
 if __name__ == '__main__':
     for extension in initial_extensions:
         try:
-            bot.add_cog(extension(bot))
+            bot.load_extension(extension)
         except Exception as e:
-            print(f'Failed to load extension {extension}.')
+            print(f'Failed to load extension {extension}.', file=sys.stderr)
+            traceback.print_exc()
 
 
 on_bot_init()
