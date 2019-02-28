@@ -89,18 +89,6 @@ def get_commands(message):
     return result
 
 
-# returns bot_stats string
-def get_bot_stats(message):
-    # increment commands count
-    globals.increment_commands_run()
-    log_str = 'recieved ' + globals.c_prefix + 'bot_stats command from {0}'.format(message.author.display_name)
-    print(log_str)
-    logging.info(log_str)
-    # construct response
-    ret_str = 'This bot is currently in {0} guilds, tracking {1} member(s).\n'.format(globals.bot_stats['guild_count'], globals.bot_stats['user_count'])
-    ret_str += 'This bot has processed a total of {0} command(s).'.format(globals.bot_stats['commands_run'])
-    return ret_str
-
 
 # updates admin list and dumps to file
 def update_admins():
