@@ -9,7 +9,9 @@ Create a new bot user, and then paste the token from the bot in discord_token.tx
 
 Also, you need an owner_id.txt file of the user that is running this bot. This allows this user to run all commands.
 
-
+TODO:
+ - use an actual database model, over a dict persisted to disk
+ - fully implement cogs
 
 Current supported commands:
 [PREFIX]commands - returns a list of commands user is authorized to use in the guild that the message was sent.
