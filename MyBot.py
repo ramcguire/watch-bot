@@ -148,40 +148,22 @@ def guild_join(guild):
 def set_leave_all():
     timestamp = pendulum.now('UTC')
     members_in_channel = [x for x in globals.u_data.values() if x.in_channel]
-    members_in_game = [x for x in globals.u_data.values() if len(x.current_activities)]
     for member in members_in_channel:
         member.adjust_leave_time(timestamp)
-        globals.u_data[member.str_id] = member
-    for member in members_in_game:
-        for game in member.current_activities:
-            ended_game = member.activity_info[game]
-            ended_game.update_end_time(timestamp)
-            ended_game.total_time += ((timestamp - ended_game.start_time).total_seconds())
-            ended_game.in_game = False
-            member.activity_info[game] = ended_game
         globals.u_data[member.str_id] = member
     globals.u_data.commit()
 
 
 # handler method for any open times for bad shutdowns
-# used on init if shutdown = False (bad shutdown, assume users still in_channel/in_game)
+# used on init if shutdown = False (bad shutdown, assume users still in_channel)
 # if a running_since values was not able to be loaded, won't set manual leave time and will lose some time info
 def on_bad_shutdown():
     # create list of members in channel and members in game
     members_in_channel = [x for x in globals.u_data.values() if x.in_channel]
-    members_in_game = [x for x in globals.u_data.values() if len(x.current_activities)]
     if load_running_since():
         print('cleaning up users who were left as in channel (bad shutdown)')
         logging.warning('cleaning up users who were left as in channel (bad shutdown)')
         man_leave_time = globals.bot_stats['running_since']
-        for member in members_in_game:
-            for game in member.current_activities:
-                ended_game = member.activity_info[game]
-                ended_game.update_end_time(man_leave_time)
-                ended_game.total_time += ((man_leave_time - ended_game.start_time).total_seconds())
-                ended_game.in_game = False
-                member.activity_info[game] = ended_game
-            globals.u_data[member.str_id] = member
         for members in members_in_channel:
             members.adjust_leave_time(man_leave_time)
             globals.u_data[members.str_id] = members
