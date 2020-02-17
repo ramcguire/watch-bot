@@ -17,8 +17,6 @@ class MyMember():
         self.creation_time = pendulum.now('UTC').replace(microsecond=0)
         # keys are str(activity_name), values are MyGame obj
         self.activity_info = {}
-        # should contain all activties that are in_game
-        self.current_activities = set()
         # keys are str(channel_id), values are MyChannel obj
         self.channel_info = {}
         # keys are str(guild_id), values are MyGuild obj
@@ -174,64 +172,3 @@ class MyMember():
     # checks if channel id is in known channels
     def check_known_channels(self, id):
         return (id in self.channel_info.keys())
-
-    def read_activity(self, activity):
-        if activity.name in self.activity_info.keys():
-            self.activity_info[activity.name].update_start_time(pendulum.instance(activity.start, 'UTC'))
-        else:
-            new_act = MyGame(activity)
-            self.activity_info[activity.name] = new_act
-
-    # sets a leave_time for every game still in game
-    def set_activity_end_time(self, leave_time):
-        for game in [x for x in self.activity_info.values() if x.in_game]:
-            game.update_end_time(leave_time)
-
-    def process_activities(self, before, after):
-        timestamp = pendulum.now('UTC')
-        before_set = set()
-        after_set = set()
-        # populate both sets
-        if before is not None:
-            for act in before.activities:
-                before_set.add(act.name)
-        if after is not None:
-            for act in after.activities:
-                after_set.add(act.name)
-
-        # check if activities haven't been instantiated yet
-        if before is not None:
-            new_activities = [x for x in before.activities if x.name not in self.activity_info]
-            for act in new_activities:
-                self.current_activities.add(act.name)
-                new_act = MyGame(act.name)
-                new_act.update_start_time(pendulum.instance(act.start, 'UTC'))
-                self.activity_info[act.name] = new_act
-
-        if after is not None:
-            new_activities = [x for x in after.activities if x.name not in self.activity_info]
-            for act in new_activities:
-                self.current_activities.add(act.name)
-                new_act = MyGame(act.name)
-                new_act.update_start_time(pendulum.instance(act.start, 'UTC'))
-                self.activity_info[act.name] = new_act
-
-        # for ending activity
-        for ended_act in [x for x in before_set if x not in after_set]:
-            # end the activity, and update total_time
-            ending = self.activity_info[ended_act]
-            ending.update_end_time(timestamp)
-            ending.total_time += ((timestamp - ending.start_time).total_seconds())
-            ending.in_game = False
-            self.activity_info[ended_act] = ending
-            self.current_activities.remove(ended_act)
-
-        # for starting an activity
-        for started_act in (after_set - before_set):
-            self.current_activities.add(started_act)
-            if started_act not in self.activity_info:
-                new_act = MyGame(started_act)
-                new_act.update_start_time(timestamp)
-                self.activity_info[started_act] = new_act
-            else:
-                self.activity_info[started_act].update_start_time(timestamp)

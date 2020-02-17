@@ -23,72 +23,12 @@ globals.init()
 bot = commands.Bot(command_prefix=globals.c_prefix, owner_id=globals.owner_id)
 
 
-# commands that are displayed with $commands
-commands_str = 'Current commands (only valid for guild the $commands message was sent in):\n'
-commands_str = globals.c_prefix + 'commands - returns a list of commands user is authorized to use in the guild that the message was sent.\n'
-commands_str += globals.c_prefix + 'timespent - returns time spent in voice channels of the requesting user in current guild.\n'
-commands_str += globals.c_prefix + 'bot_stats - returns random bot statistics.\n'
-commands_str += globals.c_prefix + 'reset_user_stats - removes stats for respective user in this guild. Must confirm by sending CONFIRM in DM.\n'
-commands_str += globals.c_prefix + 'set_pref_tz - allows you to set a preferred timezone for data display. Syntax: $set_pref_tz Timezone_name\n'
-commands_str += '-------------- use https://en.wikipedia.org/wiki/List_of_tz_database_time_zones to find your Timezone database name.\n'
-commands_str += globals.c_prefix + 'get_pref_tz - sends you a message with your current timezone (defaults to UTC).\n'
-commands_str += globals.c_prefix + 'guild_stats - Prints a summary of collective time spent by users in voice channels in this guild.'
-commands_str += globals.c_prefix + 'gametime - Prints a summary of time spent in games that the bot has tracked. Use \"gametime current\" to see history of current activity.\n'
-commands_str += globals.c_prefix + 'guild_games - Prints the collective time users in this guild have spent in each game.\n'
-
-commands_str_local_admin = '[GUILD ADMIN] ' + globals.c_prefix + 'reset_guild_stats (owner/admin of guild only) - removes all tracked time for all users in guild.\n'
-commands_str_local_admin = '[GUILD ADMIN] ' + globals.c_prefix + 'leave_guild (owner/admin of guild only) - leaves guild, but does not remove tracked information. Bot can be re-added.\n'
-
-
-commands_str_admin = ''
-
-commands_str_owner = '[OWNER] ' + globals.c_prefix + 'reset_commands_run - resets commands_run from bot stats to 0.\n'
-commands_str_owner += '[OWNER] ' + globals.c_prefix + 'add_admin - adds users that are mentioned in this message to admins list.\n'
-commands_str_owner += '[OWNER] ' + globals.c_prefix + 'rem_admin - removes users that are mentioned in this message from admins list.\n'
-commands_str_owner += '[OWNER] ' + globals.c_prefix + 'shutdown - best way to shutdown bot, cleans up all in_channel members and quits.\n'
-commands_str_owner += '[OWNER] ' + globals.c_prefix + 're_init - removes all data and bot stats and starts fresh.\n'
-
 client = discord.Client()
 
-'''
-# helper method to increment commands run in bot_stats dict
-def increment_commands_run():
-    if 'commands_run' in globals.bot_stats.keys():
-        cmds_run = globals.bot_stats['commands_run']
-        cmds_run += 1
-        globals.bot_stats['commands_run'] = cmds_run
-        globals.bot_stats.commit()
-    else:
-        print('no current bot stats found, starting count now')
-        logging.warning('no current bot stats found, starting count now')
-        globals.bot_stats['commands_run'] = 1
-        globals.bot_stats.commit()
-'''
-
 # resets commands_run stat
-def reset_commands_run(message):
-    if is_owner(message.author.id):
-        logging.info('recieved (VALID) ' + globals.c_prefix + 'reset_commands_run command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
-        globals.bot_stats['commands_run'] = 0
-        globals.bot_stats.commit()
-    else:
-        logging.warning('recieved (INVALID) ' + globals.c_prefix + 'reset_commands_run command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
-
-
-# gets list of commands that the author is allowed to use
-# each is on a guild by guild basis
-# (only returns allowed commands for guild in which message was sent)
-def get_commands(message):
-    result = commands_str
-    if is_local_admin(message.author.id):
-        result += commands_str_local_admin
-    if is_bot_admin(message.author.id):
-        result += commands_str_admin
-    if is_owner(message.author.id):
-        result += commands_str_owner
-    return result
-
-
+def _reset_commands_run():
+    globals.bot_stats['commands_run'] = 0
+    globals.bot_stats.commit()
 
 # updates admin list and dumps to file
 def update_admins():
@@ -97,48 +37,16 @@ def update_admins():
     pickle.dump(globals.admins, open('./admins.p', 'wb'))
 
 
-# adds all members to admin file
-def add_admin(message):
-    # adds all members that weren't already in admins list to admins list
-    if is_owner(message.author.id):
-        logging.info('recieved (VALID) ' + globals.c_prefix + 'addadmin command from {0}'.format(message.author.display_name))
-        globals.increment_commands_run()
-        # only iterates through members not already in admin list
-        list_new_admins = [x for x in message.mentions if str(x.id) not in globals.admins]
-        for member in list_new_admins:
-            new_admin = read_member(member)
-            logging.info('adding {0} to admins list'.format(new_admin.display_name))
-            globals.admins.append(new_admin.str_id)
-        if not len(list_new_admins):
-            update_admins()
-    else:
-        logging.warning('recieved (INVALID) ' + globals.c_prefix + 'add_admin command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
-
-
-# returns a string with a list of admins
-def list_admins(message):
-    if is_bot_admin(message.author.id):
-        logging.info('recieved (VALID) ' + globals.c_prefix + 'list_admins command from {0}'.format(message.author.display_name))
-        admin_list = 'List of current admins:\n'
-        for admin in globals.admins:
-            admin_list += '{0} - id: {1}\n'.format(globals.u_data[admin].display_name, admin)
-        return admin_list
-    else:
-        return 'Not authorized to view bot admins.'
-
-
-# removes admins from admin file and updates
-def remove_admin(message):
-    if is_owner(message.author.id):
-        logging.info('recieved (VALID) ' + globals.c_prefix + 'rem_admin command from {0}'.format(message.author.display_name, message.guild.name))
-        globals.increment_commands_run()
-        list_rem_admins = [x for x in message.mentions if str(x.id) in globals.admins]
-        for member in list_rem_admins:
-            globals.admins.remove(str(member.id))
-        if not len(list_rem_admins):
-            update_admins()
-    else:
-        logging.warning('recieved (INVALID) ' + globals.c_prefix + 'rem_admin command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
+# adds all members mentioned in message to admin file
+def _add_admin(message):
+    # only iterates through members not already in admin list
+    list_new_admins = [x for x in message.mentions if str(x.id) not in globals.admins]
+    for member in list_new_admins:
+        new_admin = read_member(member)
+        logging.info('adding {0} to admins list'.format(new_admin.display_name))
+        globals.admins.append(new_admin.str_id)
+    if not len(list_new_admins):
+        update_admins()
 
 
 # updates running_since file (pendulum obj)
@@ -290,7 +198,6 @@ def on_bad_shutdown():
 # returns a collective timesummary for users spent in each voice channel
 # only works in guild
 def get_guild_stats(message):
-    globals.increment_commands_run()
     mem = read_member(message.author)
     total_time = 0.0
     ret_str = 'User voice channel activity in guild \"{0}\"\n'.format(message.guild.name)
@@ -322,15 +229,16 @@ def get_guild_stats(message):
 
 # calculates timespent for user in all tracked guilds
 def get_full_timesummary(message):
-    globals.increment_commands_run()
     ret_str = ''
     member_id = str(message.author.id)
+
     log_str = 'recieved ' + globals.c_prefix + 'timespent (full timesummary) command from \"{0}\" DMChannel'.format(message.author.display_name)
     print(log_str)
     logging.info(log_str)
-    no_data_str = 'No voice channel data found for \"{0}\".'.format(message.author.display_name)
+
     if member_id not in globals.u_data.keys():
-        return no_data_str
+        return 'No voice channel data found for \"{0}\".'.format(message.author.display_name)
+
     member = globals.u_data[member_id]
     for guilds in member.guild_info.keys():
         ret_str += 'Guild: {0}\n'.format(globals.g_data[str(guilds)].name)
@@ -350,59 +258,9 @@ def get_full_timesummary(message):
             ret_str += data_since
     return ret_str
 
-
-def get_current_game_time(message):
-    globals.increment_commands_run()
-    member = read_member(message.author)
-    if member is None:
-        return
-    if len(member.activity_info):
-        current_games = [x for x in member.activity_info.values() if x.in_game]
-        if len(current_games):
-            return_str = '{0}\'s current games:\n'.format(message.author.display_name)
-            for game in (sorted(current_games, key=operator.attrgetter('name'))):
-                return_str += '{0} - {1}\n'.format(str(game.name), format_seconds(game.get_total_time_in_game()))
-            return return_str
-        return '{0} has no current game.\n'.format(message.author.display_name)
-
-
-def get_game_time(message):
-    globals.increment_commands_run()
-    member = read_member(message.author)
-    if member is None:
-        return
-    # check if there is any activity_info
-    if len(member.activity_info):
-        return_str = '{0}\'s total time spent in game:\n'.format(message.author.display_name)
-        #(sorted(member.activity_info.values(), key=operator.attrgetter('name')))
-        for game in (sorted(member.activity_info.values(), key=operator.attrgetter('name'))):
-            return_str += '{0} - {1}\n'.format(str(game.name), format_seconds(game.get_total_time_in_game()))
-        return return_str
-    return 'No game data found for {0}'.format(message.author.display_name)
-
-
-def get_guild_game_time(message):
-    globals.increment_commands_run()
-    guild_activities = SortedDict()
-    for mem in [x for x in message.guild.members if not x.bot]:
-        this_mem = read_member(mem)
-        if this_mem is None:
-            pass
-        else:
-            for activity in this_mem.activity_info.keys():
-                if activity not in guild_activities.keys():
-                    guild_activities[activity] = 0
-                guild_activities[activity] += this_mem.activity_info[activity].get_total_time_in_game()
-    return_str = 'Activity summary for guild \"{0}\":\n'.format(message.guild.name)
-    for key in guild_activities.keys():
-        return_str += '{0} - {1}\n'.format(key, format_seconds(guild_activities[key]))
-    return return_str
-
-
 # calculates time_spent when passed a message obj
 # returns result as string
 def get_timesummary(message):
-    globals.increment_commands_run()
     guild_id = str(message.guild.id)
     member_id = str(message.author.id)
     log_str = 'recieved ' + globals.c_prefix + 'timespent command from \"{0}\" in guild \"{1}\"'.format(message.author.display_name, message.guild.name)
@@ -438,8 +296,7 @@ def get_timesummary(message):
 
 
 # method that resets one users stats in all tracked guilds
-def reset_my_stats(message):
-    globals.increment_commands_run()
+def _reset_user_stats(message):
     logging.info('recieved ' + globals.c_prefix + 'reset_user_stats command from {0} in DMChannel'.format(message.author.display_name))
     if str(message.author.id) in globals.u_data.keys():
         member = globals.u_data[str(message.author.id)]
@@ -452,7 +309,6 @@ def reset_my_stats(message):
 # method for resetting individual user stats
 # returns string based on input message
 def reset_user_stats(message):
-    globals.increment_commands_run()
     logging.info('recieved ' + globals.c_prefix + 'reset_user_stats command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
     this_guild = message.guild.id
     deletable = []
@@ -475,10 +331,7 @@ def reset_user_stats(message):
 def reset_guild_stats(message):
     if is_owner(message.author.id) or is_bot_admin(message.author.id) or is_local_admin(message.author.id):
         logging.info('recieved (VALID) ' + globals.c_prefix + 'rem_guild_stats command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
-        globals.increment_commands_run()
-        log_str = 'removing all stats from guild \"{0}\"'.format(message.guild.name)
-        print(log_str)
-        logging.info(log_str)
+        print('removing all stats from guild \"{0}\"'.format(message.guild.name))
         deletable = []
         this_guild = message.guild.id
         for members in message.guild.members:
@@ -560,15 +413,6 @@ def bot_ready():
     # gets list of guilds
     for g in bot.guilds:
         guild_join(g)
-    # checks all visible members for current activities
-    for member in bot.get_all_members():
-        mem = read_member(member)
-        if mem is not None:
-            mem.process_activities(member, member)
-            for act in member.activities:
-                if type(act) is discord.Game:
-                    mem.read_activity(act)
-            globals.u_data[mem.str_id] = mem
     update_bot_stats()
     globals.u_data.commit()
     globals.bot_stats.commit()
@@ -581,9 +425,7 @@ def bot_ready():
 
 # method to help fully re_init bot and data
 # will lose all tracked information!
-def re_init(message):
-    logging.info('recieved ' + globals.c_prefix + 're_init command from {0}'.format(message.author.display_name))
-    # clear all tracked data (will be re-initialized in on_bot_init)
+def _re_init():
     globals.g_data.clear()
     globals.u_data.clear()
     globals.bot_stats.clear()
@@ -603,11 +445,7 @@ def re_init(message):
     global bkg_timer
     bkg_timer.cancel()
     bkg_timer = None
-    logging.info('Canceled bkg_timer as part of re_init')
-    # clear the log file??? why do we have logging in this function....
-    # maybe change....
-    clear_log_file()
-    # finally, call on_bot_init
+    #finish up
     bot_ready()
 
 
@@ -620,23 +458,19 @@ def clear_log_file():
 
 # function for shutting down bot
 # cleans up all in channel connections and updates stats
-def shutdown(message):
-    globals.increment_commands_run()
-    logging.info('recieved ' + globals.c_prefix + 'shutdown command from {0}'.format(message.author.display_name))
+def shutdown_bot(message):
     # cancel bkg_timer, and set it to None
     global bkg_timer
     bkg_timer.cancel()
     bkg_timer = None
     print('Canceled timer, finishing shutdown procedures')
-    logging.info('Canceled timer, finishing shutdown procedures')
-    # make all users leave channel and update shutdown value
+    # make all users leave channel and update shutdown status value
     set_leave_all()
     globals.bot_stats['shutdown'] = True
     update_bot_stats()
     # close sqlitedict connections
     globals.u_data.close()
     globals.bot_stats.close()
-    logging.info('closing client and quitting script')
 
 
 def set_pref_tz(message):
@@ -647,7 +481,6 @@ def set_pref_tz(message):
     if len(arguments):
         # check if argument is a valid timezone name
         if arguments[0] in pendulum.timezones:
-            globals.increment_commands_run()
             # set and update pref_tz
             member = read_member(message.author)
             member.pref_tz = arguments[0]
@@ -660,37 +493,29 @@ def set_pref_tz(message):
 
 # returns the pref_tz of the author
 def get_pref_tz(message):
-    globals.increment_commands_run()
     member = read_member(message.author)
     if member is None:
         return None
     return member.pref_tz
 
 
-# leaves guild message was sent in
-# for local_admin or owner
-def leave_guild(message):
+# helper to leave_guild command, used to clean up data
+def _leave_guild(message):
     # if user is authorized to run this command
-    if is_owner(message.author.id) or is_local_admin(message.author.id):
-        globals.increment_commands_run()
-        logging.info('recieved ' + globals.c_prefix + 'leave_guild command from {0} in guild \"{1}\"'.format(message.author.display_name, message.guild.name))
-        # iterate through members in voice channels and adjust leave time
-        for channels in message.guild.voice_channels:
-            for members in channels.members:
-                current_mem = read_member(members)
-                if current_mem is None:
-                    pass
-                current_mem.adjust_leave_time(pendulum.now('UTC'))
-                globals.u_data[current_mem.str_id] = current_mem
-        # commit changes, and remove guild from guild data
-        globals.u_data.commit()
-        logging.info('finished closing voice channel information for members in {0}, leaving guild'.format(message.guild.name))
-        guild_to_leave = globals.g_data[str(message.guild.id)]
-        guild_to_leave.in_guild = False
-        globals.g_data[str(message.guild.id)] = guild_to_leave
-        update_bot_stats()
-        return
-    logging.warning('recieved INVALID ' + globals.c_prefix + 'leave_guild command from {0}'.format(message.author.display_name))
+    # iterate through members in voice channels and adjust leave time
+    for channels in message.guild.voice_channels:
+        for members in channels.members:
+            current_mem = read_member(members)
+            if current_mem is None:
+                pass
+            current_mem.adjust_leave_time(pendulum.now('UTC'))
+            globals.u_data[current_mem.str_id] = current_mem
+    # commit changes, and remove guild from guild data
+    globals.u_data.commit()
+    guild_to_leave = globals.g_data[str(message.guild.id)]
+    guild_to_leave.in_guild = False
+    globals.g_data[str(message.guild.id)] = guild_to_leave
+    update_bot_stats()
     return
 
 # ------------------------------------------------------------------------------------------------------------------------#
@@ -699,11 +524,21 @@ def leave_guild(message):
 # ------------------------------------------------------------------------------------------------------------------------#
 # ------------------------------------------------------------------------------------------------------------------------#
 
+async def is_guild_admin(ctx):
+    # if message was not sent from a guild return false
+    if ctx.message.guild is None:
+        return False
+    # if author was bot owner or a guild administrator
+    if ctx.message.author.is_owner():
+        return True
+    return ctx.message.author.permissions.administrator
+
+async def is_text_channel(ctx):
+    return type(ctx.message.channel) == discord.TextChannel
 
 @bot.event
 async def on_ready():
     bot_ready()
-
 
 # called when bot is added to a guild
 # just calls guild_join() method
@@ -714,11 +549,13 @@ async def on_guild_join(guild):
 
 @bot.command()
 async def say_hello(ctx):
+    globals.increment_commands_run()
     await ctx.send('hello!')
 
 
 @bot.command()
-async def timespend(ctx):
+async def timespent(ctx):
+    globals.increment_commands_run()
     if not ctx.message.guild:
         summary_str = 'Full voice channel time information:\n'
         summary_str += get_full_timesummary(ctx.message)
@@ -726,113 +563,105 @@ async def timespend(ctx):
         return
     await ctx.send(get_timesummary(ctx.message))
 
-
-@bot.command()
-@commands.is_owner()
-async def shutdown2(ctx):
-    shutdown(ctx.message)
-    await bot.close()
-    exit()
-
-
 @bot.command()
 @commands.is_owner()
 async def _add_admin(ctx):
+    globals.increment_commands_run()
     return
-
 
 @bot.command()
 @commands.is_owner()
-async def reinit(ctx):
-    re_init(ctx.message)
+async def shutdown(ctx):
+    # handles all shutdown procedures
+    shutdown_bot(ctx.message)
+    # closes client and exits
+    await client.close()
+    exit()
+    return
+
+@bot.command()
+@commands.is_owner()
+async def add_admin(ctx):
+    globals.increment_commands_run()
+    _add_admin(ctx.message)
+    return
+
+@bot.command()
+@commands.is_owner()
+async def remove_admin(ctx):
+    list_rem_admins = [x for x in ctx.message.mentions if str(x.id) in globals.admins]
+    for member in list_rem_admins:
+        globals.admins.remove(str(member.id))
+    if not len(list_rem_admins):
+        update_admins()
+
+@bot.command()
+@commands.check(is_text_channel)
+async def reset_guild_stats(ctx):
+    globals.increment_commands_run()
+    await ctx.message.channel.send(reset_guild_stats(ctx.message))
+    guild_join(ctx.message.guild)
+    return
+
+@bot.command()
+async def reset_user_stats(ctx):
+    if type(ctx.message.channel) is discord.DMChannel:
+        await ctx.message.channel.send('Are you sure you want to remove all user stats?')
+        await ctx.message.channel.send('Send \"CONFIRM\" to confirm.')
+
+        def check(m):
+            return m.content == 'CONFIRM'
+        await client.wait_for('message', check=check)
+        globals.increment_commands_run()
+        _reset_user_stats(ctx.message)
+        return
+
+@bot.command()
+@commands.is_owner()
+async def list_admins(ctx):
+    globals.increment_commands_run()
+    admin_list = 'List of current admins:\n'
+    for admin in globals.admins:
+        admin_list += '{0} - id: {1}\n'.format(globals.u_data[admin].display_name, admin)
+    await ctx.message.author.send(admin_list)
+    return
+
+# need to fix this
+@bot.command()
+async def bot_stats(ctx):
+    await ctx.message.channel.send(get_bot_stats(message))
+    return
+
+@bot.command()
+@commands.is_owner()
+async def reset_commands_run(ctx):
+    _reset_commands_run()
+
+@bot.command()
+@commands.is_owner()
+async def re_init(ctx):
+    _re_init()
+
+@bot.command()
+@commands.check(is_text_channel)
+@commands.check(is_guild_admin)
+async def leave_guild(ctx):
+    _leave_guild(ctx.message)
+    await ctx.message.channel.send('No longer tracking voice channel activity. Bye!')
+    await ctx.message.guild.leave()
+    
+@bot.command()
+@commands.check(is_text_channel)
+async def guild_stats(ctx):
+    await ctx.message.channel.send(get_guild_stats(ctx.message))
+
 
 
 # event for all messages, handles commands
-# look into using bot functionality from discord library
+# TODO: replace all commands with @bot.command() decorator
 @client.event
 async def on_message(message):
     if message.author == client.user:
-        return
-
-    # timespent command
-    if message.content.startswith(globals.c_prefix + 'timespent'):
-        if type(message.channel) is discord.DMChannel:
-            await message.channel.send('Full voice channel time information:')
-            await message.channel.send(get_full_timesummary(message))
-            return
-        await message.channel.send(get_timesummary(message))
-        return
-
-    # shutdown command
-    if message.content.startswith(globals.c_prefix + 'shutdown'):
-        # handles all shutdown procedures
-        shutdown(message)
-        # closes client and exits
-        await client.close()
-        exit()
-        return
-
-    # add_admin
-    # OWNER ONLY
-    if message.content.startswith(globals.c_prefix + 'add_admin'):
-        add_admin(message)
-        return
-
-    # list_admins
-    # OWNER OR BOT ADMIN
-    if message.content.startswith(globals.c_prefix + 'list_admins'):
-        await message.author.send(list_admins(message))
-
-    # rem_admin
-    # OWNER ONLY
-    if message.content.startswith(globals.c_prefix + 'rem_admin'):
-        remove_admin(message)
-        return
-
-    # reset_guild_stats
-    # LOCAL ADMIN, BOT ADMIN, OR OWNER
-    if message.content.startswith(globals.c_prefix + 'reset_guild_stats'):
-        if type(message.channel) is discord.DMChannel:
-            await message.channel.send('This command needs to be sent from a guild.')
-            return
-        await message.channel.send(reset_guild_stats(message))
-        guild_join(message.guild)
-        return
-
-    # reset_user_stats
-    if message.content.startswith(globals.c_prefix + 'reset_user_stats'):
-        if type(message.channel) is discord.DMChannel:
-            await message.channel.send('Are you sure you want to remove all user stats?')
-            await message.channel.send('Send \"CONFIRM\" to confirm.')
-
-            def check(m):
-                return m.content == 'CONFIRM'
-            await client.wait_for('message', check=check)
-            reset_my_stats(message)
-            return
-        reset_user_stats(message)
-        return
-
-    # botstats
-    if message.content.startswith(globals.c_prefix + 'bot_stats'):
-        await message.channel.send(get_bot_stats(message))
-        return
-
-    # commands
-    if message.content.startswith(globals.c_prefix + 'commands'):
-        await message.author.send(get_commands(message))
-        return
-
-    # reset_commands_run
-    # OWNER ONLY
-    if message.content.startswith(globals.c_prefix + 'reset_commands_run'):
-        reset_commands_run(message)
-        return
-
-    # re_init
-    # OWNER ONLY
-    if message.content.startswith(globals.c_prefix + 're_init'):
-        re_init(message)
         return
 
     # set_pref_tz
@@ -853,38 +682,6 @@ async def on_message(message):
         await message.author.send('Your current preferred timezone is set to {0}'.format(get_pref_tz(message)))
         return
 
-    # leave_guild
-    if message.content.startswith(globals.c_prefix + 'leave_guild'):
-        if type(message.channel) is discord.DMChannel:
-            await message.channel.send('This command needs to be sent from a guild channel.')
-            return
-        leave_guild(message)
-        await message.channel.send('No longer tracking voice channel activity. Bye!')
-        await message.guild.leave()
-        return
-
-    if message.content.startswith(globals.c_prefix + 'guild_stats'):
-        if type(message.channel) is discord.DMChannel:
-            await message.channel.send('This command needs to be sent from a guild channel.')
-            return
-        await message.channel.send(get_guild_stats(message))
-        return
-
-    if message.content == str(globals.c_prefix + 'gametime current'):
-        await message.channel.send(get_current_game_time(message))
-        return
-
-    if message.content.startswith(globals.c_prefix + 'gametime'):
-        await message.channel.send(get_game_time(message))
-        return
-
-    if message.content.startswith(globals.c_prefix + 'guild_games'):
-        if type(message.channel) is discord.DMChannel:
-            await message.channel.send('This command needs to be sent from a guild channel.')
-            return
-        await message.channel.send(get_guild_game_time(message))
-
-
 # for voice state updates
 # any time a member leaves or joins a voice channel
 @bot.event
@@ -899,19 +696,7 @@ async def on_voice_state_update(member, before, after):
     globals.u_data.commit()
     return
 
-
-# for tracking activities
-@client.event
-async def on_member_update(before, after):
-    current_member = read_member(before)
-    if current_member is None:
-        return
-    current_member.process_activities(before, after)
-    globals.u_data[current_member.str_id] = current_member
-    globals.u_data.commit()
-    return
-
-
+# cogs setup
 initial_extensions = ['cogs.members']
 
 if __name__ == '__main__':
@@ -926,4 +711,4 @@ if __name__ == '__main__':
 on_bot_init()
 bot.run(globals.TOKEN, bot=True, reconnect=True)
 
-#client.run(TOKEN)
+

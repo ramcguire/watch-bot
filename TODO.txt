@@ -8,5 +8,4 @@ ISSUES:
 
 NEED:
 * implement cogs for modular reloading
-* use Command extension
-* move to a true database model, stop using sqlitedict
+* move to a true database model, stop using sqlitedict, using SQLAlchemy?
