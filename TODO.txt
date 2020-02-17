@@ -1,10 +1,11 @@
 * Data visualization - graphs/infographics
 * Performance tracking
 
-
+ISSUES:
 * Away time isn't counted in total time?
 
 
 
 NEED:
-* upgrade bot w/o downtime or data game
+* implement cogs for modular reloading
+* move to a true database model, stop using sqlitedict, using SQLAlchemy?
