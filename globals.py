@@ -46,8 +46,6 @@ def init():
 
     admins = pickle.load(open('./admins.p', 'rb'))
 
-    # helper method to increment commands run in bot_stats dict
-
 def increment_commands_run():
     if 'commands_run' in bot_stats.keys():
         cmds_run = bot_stats['commands_run']
